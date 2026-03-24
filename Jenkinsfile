@@ -1,19 +1,17 @@
 pipeline {
     agent any
-parameters {
-    string(name: 'REPO_NAME',      defaultValue: '',      description: 'Triggering repo')
-    string(name: 'REPO_VERSION',   defaultValue: '',      description: 'New version')
-    string(name: 'BUMP_TYPE',      defaultValue: 'patch', description: 'Bump type')
-    string(name: 'DEPLOY_VERSION', defaultValue: '',      description: 'Fill to deploy e.g. 1.0.15')
-}
+    parameters {
+        string(name: 'REPO_NAME',      defaultValue: '',      description: 'Triggering repo')
+        string(name: 'REPO_VERSION',   defaultValue: '',      description: 'New version')
+        string(name: 'BUMP_TYPE',      defaultValue: 'patch', description: 'Bump type')
+        string(name: 'DEPLOY_VERSION', defaultValue: '',      description: 'Fill to deploy e.g. 1.0.23 — leave blank for version bump')
+    }
     environment {
-        GIT_REPO_URL = 'https://github.com/Rohitsss-lab/vertotal.git'
+        GIT_REPO_URL = 'https://github.com/Rohitsss-lab/servertot.git'
     }
     stages {
         stage('Clean Workspace') {
-            steps {
-                cleanWs()
-            }
+            steps { cleanWs() }
         }
 
         // ══════════════════════════════════════════
@@ -32,21 +30,16 @@ parameters {
                         credentialsId: 'github-token'
                     ]]
                 ])
-                echo "Checked out vertotal at tag v${params.DEPLOY_VERSION}"
+                echo "Checked out servertot at tag v${params.DEPLOY_VERSION}"
             }
         }
         stage('Read Deploy Versions') {
-    when {
-        expression { return params.DEPLOY_VERSION != null && params.DEPLOY_VERSION.trim() != '' }
-    }
-    steps {
-        script {
-            // Read versions.json directly in Groovy — no Python needed
-            def versionsText = readFile('versions.json')
-            echo "versions.json content: ${versionsText}"
-
-            // Write to a temp file for Python to parse
-            writeFile file: 'PARSE_VERSIONS.py', text: """
+            when {
+                expression { return params.DEPLOY_VERSION != null && params.DEPLOY_VERSION.trim() != '' }
+            }
+            steps {
+                script {
+                    writeFile file: 'PARSE_VERSIONS.py', text: '''
 import json
 
 with open("versions.json", "r") as f:
@@ -58,30 +51,30 @@ ver2 = data.get("ver2", "").strip()
 print(f"ver1={ver1}")
 print(f"ver2={ver2}")
 
-with open("DEPLOY_VER1_VERSION.txt", "w", newline='') as f:
+with open("DEPLOY_VER1_VERSION.txt", "w", newline="") as f:
     f.write(ver1)
 
-with open("DEPLOY_VER2_VERSION.txt", "w", newline='') as f:
+with open("DEPLOY_VER2_VERSION.txt", "w", newline="") as f:
     f.write(ver2)
 
-print(f"Ready to deploy ver1={ver1} ver2={ver2}")
-"""
-            bat '"C:\\Program Files\\Python313\\python.exe" PARSE_VERSIONS.py'
+print(f"Ready: ver1={ver1} ver2={ver2}")
+'''
+                    bat '"C:\\Program Files\\Python313\\python.exe" PARSE_VERSIONS.py'
 
-            env.DEPLOY_VER1 = readFile('DEPLOY_VER1_VERSION.txt').trim()
-                                .replaceAll('[^0-9.]', '')
-            env.DEPLOY_VER2 = readFile('DEPLOY_VER2_VERSION.txt').trim()
-                                .replaceAll('[^0-9.]', '')
+                    env.DEPLOY_VER1 = readFile('DEPLOY_VER1_VERSION.txt')
+                                        .replaceAll('[^0-9.]', '').trim()
+                    env.DEPLOY_VER2 = readFile('DEPLOY_VER2_VERSION.txt')
+                                        .replaceAll('[^0-9.]', '').trim()
 
-            echo "==========================================="
-            echo "DEPLOY MODE — vertotal v${params.DEPLOY_VERSION}"
-            echo "ver1 will deploy : ${env.DEPLOY_VER1}"
-            echo "ver2 will deploy : ${env.DEPLOY_VER2}"
-            echo "NO version bump — NO commit — NO tag"
-            echo "==========================================="
+                    echo "==========================================="
+                    echo "DEPLOY MODE — servertot v${params.DEPLOY_VERSION}"
+                    echo "ver1 will deploy : ${env.DEPLOY_VER1}"
+                    echo "ver2 will deploy : ${env.DEPLOY_VER2}"
+                    echo "NO version bump — NO commit — NO tag"
+                    echo "==========================================="
+                }
+            }
         }
-    }
-}
         stage('Deploy ver1') {
             when {
                 expression { return params.DEPLOY_VERSION != null && params.DEPLOY_VERSION.trim() != '' }
@@ -131,38 +124,39 @@ print(f"Ready to deploy ver1={ver1} ver2={ver2}")
                 ])
             }
         }
-      stage('Process Versions') {
-    when {
-        expression { return params.DEPLOY_VERSION == null || params.DEPLOY_VERSION.trim() == '' }
-    }
-    steps {
-        script {
-            def repoName    = params.REPO_NAME    ?: 'EMPTY'
-            def repoVersion = params.REPO_VERSION ?: 'EMPTY'
-            def bumpType    = params.BUMP_TYPE    ?: 'patch'
+        stage('Process Versions') {
+            when {
+                expression { return params.DEPLOY_VERSION == null || params.DEPLOY_VERSION.trim() == '' }
+            }
+            steps {
+                script {
+                    def repoName    = params.REPO_NAME    ?: ''
+                    def repoVersion = params.REPO_VERSION ?: ''
+                    def bumpType    = params.BUMP_TYPE    ?: 'patch'
 
-            echo "REPO_NAME    = ${repoName}"
-            echo "REPO_VERSION = ${repoVersion}"
-            echo "BUMP_TYPE    = ${bumpType}"
+                    echo "REPO_NAME    = ${repoName}"
+                    echo "REPO_VERSION = ${repoVersion}"
 
-            // Write params to a file — bypass withEnv completely
-            writeFile file: 'PARAMS.txt', 
-                      text: "REPO_NAME=${repoName}\nREPO_VERSION=${repoVersion}\nBUMP_TYPE=${bumpType}"
+                    writeFile file: 'PARAMS.txt',
+                              text: "REPO_NAME=${repoName}\nREPO_VERSION=${repoVersion}\nBUMP_TYPE=${bumpType}"
 
-            bat '"C:\\Program Files\\Python313\\python.exe" process_versions.py'
+                    bat '"C:\\Program Files\\Python313\\python.exe" process_versions.py'
+                }
+            }
         }
-    }
-}
         stage('Read Results') {
             when {
                 expression { return params.DEPLOY_VERSION == null || params.DEPLOY_VERSION.trim() == '' }
             }
             steps {
                 script {
-                    env.NEW_UMBRELLA_VERSION = readFile('NEW_UMBRELLA_VERSION.txt').trim()
+                    env.NEW_UMBRELLA_VERSION = readFile('NEW_UMBRELLA_VERSION.txt')
+                                                .replaceAll('[^0-9.]', '').trim()
                     env.NEW_TAG              = readFile('NEW_TAG.txt').trim()
-                    env.VER1_VERSION         = readFile('VER1_VERSION.txt').trim()
-                    env.VER2_VERSION         = readFile('VER2_VERSION.txt').trim()
+                    env.VER1_VERSION         = readFile('VER1_VERSION.txt')
+                                                .replaceAll('[^0-9.]', '').trim()
+                    env.VER2_VERSION         = readFile('VER2_VERSION.txt')
+                                                .replaceAll('[^0-9.]', '').trim()
                 }
                 echo "==========================================="
                 echo "VERSION BUMP MODE"
@@ -190,13 +184,13 @@ print(f"Ready to deploy ver1={ver1} ver2={ver2}")
                         git checkout -b release/v%NEW_UMBRELLA_VERSION%
                         git add versions.json
                         git commit -m "chore: umbrella version %NEW_UMBRELLA_VERSION%"
-                        git remote set-url origin https://%GIT_USER%:%GIT_TOKEN%@github.com/Rohitsss-lab/vertotal.git
+                        git remote set-url origin https://%GIT_USER%:%GIT_TOKEN%@github.com/Rohitsss-lab/servertot.git
                         git push origin release/v%NEW_UMBRELLA_VERSION%
                         git checkout main
                         git merge release/v%NEW_UMBRELLA_VERSION%
                         git push origin main
-                        git tag %NEW_TAG% || echo "Tag already exists skipping"
-                        git push origin %NEW_TAG% || echo "Tag already pushed skipping"
+                        git tag %NEW_TAG% || echo "Tag already exists"
+                        git push origin %NEW_TAG% || echo "Tag already pushed"
                     '''
                 }
             }
@@ -205,10 +199,10 @@ print(f"Ready to deploy ver1={ver1} ver2={ver2}")
     post {
         success {
             script {
-                if (params.DEPLOY_VERSION != null && params.DEPLOY_VERSION.trim() != '') {
-                    echo "DEPLOY SUCCESS — vertotal v${params.DEPLOY_VERSION} deployed"
-                    echo "ver1 v${env.DEPLOY_VER1} is running"
-                    echo "ver2 v${env.DEPLOY_VER2} is running"
+                if (params.DEPLOY_VERSION?.trim()) {
+                    echo "DEPLOY SUCCESS — servertot v${params.DEPLOY_VERSION}"
+                    echo "ver1 v${env.DEPLOY_VER1} is LIVE"
+                    echo "ver2 v${env.DEPLOY_VER2} is LIVE"
                 } else {
                     echo "VERSION BUMP SUCCESS — tag ${env.NEW_TAG} created"
                 }
