@@ -63,10 +63,10 @@ with open("NEW_TAG.txt", "w", encoding="utf-8", newline='') as f:
     f.write(f"v{new_umbrella}")
 
 with open("VER1_VERSION.txt", "w", encoding="utf-8", newline='') as f:
-    f.write(data["ver1"])
+    f.write(data["server1"])
 
 with open("VER2_VERSION.txt", "w", encoding="utf-8", newline='') as f:
-    f.write(data["ver2"])
+    f.write(data["server2"])
 
 print(f"Umbrella: {old_umbrella} -> {new_umbrella}")
 print(f"Updated {repo_name} to {repo_version}")
